@@ -118,147 +118,48 @@ const editorMiddleware = (req, res, next) => {
 };
 
 // ------------------- INITIALIZE DATABASE -------------------
+// ------------------- INITIALIZE DATABASE -------------------
 const initDatabase = async () => {
   try {
-    // Create tables if they don't exist
-    const tablesSQL = `
-      -- Users table
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'editor',
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Blog posts table
-      CREATE TABLE IF NOT EXISTS blog_posts (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        excerpt TEXT,
-        author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        category TEXT NOT NULL,
-        image_url TEXT,
-        published_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-        is_published BOOLEAN DEFAULT true
-      );
-      
-      -- Events table
-      CREATE TABLE IF NOT EXISTS events (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        date TEXT NOT NULL,
-        location TEXT NOT NULL,
-        image_url TEXT,
-        registration_url TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Workshops table
-      CREATE TABLE IF NOT EXISTS workshops (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        date TEXT NOT NULL,
-        facilitator TEXT NOT NULL,
-        location TEXT NOT NULL,
-        image_url TEXT,
-        registration_url TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Webinars table
-      CREATE TABLE IF NOT EXISTS webinars (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        date TEXT NOT NULL,
-        speaker TEXT NOT NULL,
-        image_url TEXT,
-        registration_url TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Careers table
-      CREATE TABLE IF NOT EXISTS careers (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        requirements TEXT,
-        location TEXT NOT NULL,
-        deadline TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Contact forms table
-      CREATE TABLE IF NOT EXISTS contact_forms (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        message TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Newsletter subscribers table
-      CREATE TABLE IF NOT EXISTS newsletter_subscribers (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        is_active BOOLEAN DEFAULT true,
-        subscribed_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      -- Donations table
-      CREATE TABLE IF NOT EXISTS donations (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        amount DECIMAL(10,2) NOT NULL,
-        message TEXT,
-        payment_method TEXT NOT NULL,
-        is_processed BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `;
+    console.log('🔄 Initializing database...');
     
-    // Execute SQL using Supabase
-    await supabase.rpc('exec_sql', { sql: tablesSQL }).catch(() => {});
-    
-    // Check for admin user
-    const { data: admin } = await supabase
+    // Check for admin user first
+    const { data: admin, error: adminError } = await supabase
       .from('users')
       .select('*')
       .eq('email', 'admin@radianthope.com')
       .single();
     
     if (!admin && process.env.CREATE_DEFAULT_ADMIN !== 'false') {
+      console.log('👤 Creating default admin user...');
       const hashedPassword = bcrypt.hashSync(process.env.DEFAULT_ADMIN_PWD || 'admin123', 10);
-      await supabase.from('users').insert({
-        name: 'Admin User',
-        email: 'admin@radianthope.com',
-        password: hashedPassword,
-        role: 'admin'
-      });
-      console.log('✅ Default admin user created');
+      
+      const { data: newAdmin, error: createError } = await supabase
+        .from('users')
+        .insert({
+          name: 'Admin User',
+          email: 'admin@radianthope.com',
+          password: hashedPassword,
+          role: 'admin'
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('❌ Error creating admin:', createError.message);
+      } else {
+        console.log('✅ Default admin user created:', newAdmin.email);
+      }
+    } else if (admin) {
+      console.log('✅ Admin user already exists');
     }
     
-    console.log('✅ Database initialized successfully');
+    console.log('✅ Database initialization complete');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    console.error('⚠️ Error initializing database (tables may need manual creation):', error.message);
+    console.log('ℹ️ Please create tables manually in Supabase SQL Editor');
   }
 };
-
-// Initialize database on startup
-initDatabase();
 
 // ------------------- HEALTH CHECK -------------------
 app.get('/api/health', async (req, res) => {
